@@ -154,7 +154,7 @@ Holds the specific aggregated payload blocks returned from the targeted APIs.
 * **Argument Parsing:** `click` (Decorator-driven library for building clean subcommands and robust flag arrays).
 * **Terminal Formatting:** `rich` (For rendering asynchronous loaders, colorized status flags, and data grids).
 * **Network Operations:** `requests` (Handles HTTP resource streaming).
-* **Local Storage:** `sqlite3` (Built-in standard library; manages native Python-to-SQL boolean state translation).
+* **Local Storage:** `MySQL` (External relational DB; requires `mysql-connector-python` for Python integration).
 * **Document Generator:** `fpdf2` or `reportlab` (Compiles system arrays into binary PDFs with working hyperlinks).
 
 ### 4.2 Target Directory Structure

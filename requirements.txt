@@ -1,0 +1,7 @@
+# Core dependencies for Project Look CLI
+click>=8.0
+rich>=13.0
+requests>=2.31.0
+fpdf2>=2.7.0
+# Optional: python-dotenv for environment variable management
+python-dotenv>=1.0.0
