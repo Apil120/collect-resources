@@ -1,4 +1,4 @@
-# Project Look - CLI Tool for Open-Source Learning Resources
+# Collect Resources - CLI Tool for Open-Source Learning Resources
 
 A command-line interface (CLI) application that aggregates, caches, and exports high-quality open-source learning resources (books, projects, and courses) from GitHub and Open Library.
 
@@ -16,8 +16,8 @@ A command-line interface (CLI) application that aggregates, caches, and exports 
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/Apil120/project-look.git
-   cd project-look
+   git clone https://github.com/Apil120/collect-resources.git
+   cd collect-resources
    ```
 
 2. Create a virtual environment:
