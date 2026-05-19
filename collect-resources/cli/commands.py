@@ -11,7 +11,7 @@ import os
 from typing import Optional, List
 from core.api_client import APIClient
 from core.cache_manager import CacheManager
-from cli.display import display_history
+from cli.display import display_results, display_history
 from utils.pdf_engine import generate_pdf
 
 
@@ -81,9 +81,72 @@ def cli():
     is_flag=True,
     help="Include non-English resources (default: filter out non-English)",
 )
+def search(
+    query: str,
+    source: Optional[str],
+    include_all: bool,
+    refresh: bool,
+    offline: bool,
+    export: Optional[str],
+    ignore_lang: bool,
+):
+    """Search for open-source learning resources."""
+    api_client = create_api_client()
+    cache_manager = CacheManager()
+
+    try:
+        if offline:
+            click.echo("Running in offline mode...")
+            results = get_offline_results(cache_manager, query, source)
+        else:
+            query_id = cache_manager.get_or_create_query(query)
+            results = []
+            if not refresh:
+                cached_results = cache_manager.get_cached_results(query_id, source)
+                if cached_results:
+                    results = cached_results
+                    click.echo("Using cached results...")
+            if refresh or not results:
+                results = fetch_from_api(api_client, query, source)
+                if results:
+                    cache_results_to_db(cache_manager, query_id, results, source)
+
+        results = [normalize_result(r) for r in results]
+
+        if not ignore_lang:
+            results = [
+                r
+                for r in results
+                if not (
+                    contains_cjk(r["title"])
+                    or contains_cjk(r.get("description", ""))
+                )
+            ]
+
+        if not include_all:
+            reputable = [r for r in results if r["reputable"]]
+            if results and not reputable:
+                click.echo(
+                    "No reputable results (>100 GitHub stars). "
+                    "Use --include-all to see all matches."
+                )
+            results = reputable
+
+        display_results(results, query)
+
+        export_path = resolve_export_path(export, query)
+        write_export(results, query, export_path)
+
+    except Exception as e:
+        click.echo(f"Error: {str(e)}", err=True)
+        sys.exit(1)
+    finally:
+        api_client.close()
+        cache_manager.close()
+
+
 @cli.command()
-@click.pass_context
-def history(ctx):
+def history():
     """Display search history."""
     cache_manager = CacheManager()
     try:
@@ -99,11 +162,40 @@ def get_offline_results(
     cache_manager: CacheManager, query: str, source: Optional[str]
 ) -> List[dict]:
     """Get results from offline cache."""
-    query_id = cache_manager.get_query_id(query)
-    if query_id is None:
+    cursor = cache_manager.connection.cursor()
+    cursor.execute(
+        "SELECT id FROM queries WHERE search_term = %s",
+        (query,),
+    )
+    row = cursor.fetchone()
+    cursor.close()
+
+    if not row:
         click.echo(f"No cached results found for query: {query}")
         return []
-    return cache_manager.get_cached_results(query_id, source)
+    return cache_manager.get_cached_results(row[0], source)
+
+
+def normalize_result(result: dict) -> dict:
+    """Fix legacy cache rows and ensure GitHub entries use owner/repo + full URL."""
+    url = (result.get("url") or "").strip()
+    title = (result.get("title") or "").strip()
+
+    if result.get("source") == "github" and "github.com/" in url:
+        path = url.split("github.com/", 1)[-1].strip("/")
+        if path and "/" not in title:
+            result["title"] = path
+        if not url.startswith("http"):
+            result["url"] = f"https://github.com/{path}"
+
+    return result
+
+
+def create_api_client() -> APIClient:
+    """Build API client using github_token from config or GITHUB_TOKEN env."""
+    config = load_config()
+    token = (config.get("github_token") or os.environ.get("GITHUB_TOKEN") or "").strip()
+    return APIClient(github_token=token or None)
 
 
 def fetch_from_api(
@@ -111,35 +203,48 @@ def fetch_from_api(
 ) -> List[dict]:
     """Fetch results from APIs."""
     results = []
+    sources = (source,) if source else ("github", "open_library")
 
-    fetchers = {
-        "github": [
-            {
-                "source": "github",
-                "title": r["name"],
-                "description": r.get("description") or "",
-                "url": r["html_url"],
-                "reputable": r["stargazers_count"] > 100,
-            }
-            for r in api_client.search_github(query)
-        ],
-        "open_library": [
-            {
-                "source": "open_library",
-                "title": r.get("title", "Unknown Title"),
-                "description": (r.get("author_name") or [""])[0],
-                "url": f"https://openlibrary.org{r.get('key', '')}",
-                "reputable": True,
-            }
-            for r in api_client.search_open_library(query)
-        ],
-    }
-
-    for src, fetch in fetchers.items():
-        if source and source != src:
-            continue
+    for src in sources:
         try:
-            results.extend(fetch())
+            if src == "github":
+                for r in api_client.search_github(query):
+                    full_name = r.get("full_name") or r.get("name", "")
+                    html_url = r.get("html_url") or (
+                        f"https://github.com/{full_name}" if full_name else ""
+                    )
+                    results.append(
+                        {
+                            "source": "github",
+                            "title": full_name,
+                            "description": r.get("description") or "",
+                            "url": html_url,
+                            "reputable": r["stargazers_count"] > 100,
+                        }
+                    )
+            elif src == "open_library":
+                for r in api_client.search_open_library(query):
+                    authors = r.get("author_name") or []
+                    key = r.get("key") or ""
+                    ol_url = (
+                        key
+                        if key.startswith("http")
+                        else f"https://openlibrary.org{key}"
+                    )
+                    description = (
+                        f"Authors: {', '.join(authors[:3])}"
+                        if authors
+                        else (r.get("subtitle") or "")
+                    )
+                    results.append(
+                        {
+                            "source": "open_library",
+                            "title": r.get("title", "Unknown Title"),
+                            "description": description,
+                            "url": ol_url,
+                            "reputable": True,
+                        }
+                    )
         except Exception as e:
             click.echo(f"Warning: Could not fetch from {src}: {str(e)}", err=True)
 

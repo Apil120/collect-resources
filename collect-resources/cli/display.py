@@ -32,24 +32,35 @@ def display_results(results: List[Dict[str, Any]], query: str):
     )
 
     table.add_column("Source", style="cyan", width=12)
-    table.add_column("Title", style="green", width=30)
-    table.add_column("Description", style="white", width=40)
-    table.add_column("URL", style="blue", width=30)
+    table.add_column("Title", style="green", width=36, overflow="fold")
+    table.add_column("Description", style="white", width=40, overflow="fold")
+    table.add_column("URL", style="blue", width=52, overflow="fold")
     table.add_column("Reputable", style="yellow", width=10)
 
     for result in results:
-        # Truncate long text for display
-        title = result['title'][:30] + "..." if len(result['title']) > 30 else result['title']
-        description = result['description'][:40] + "..." if len(result['description']) > 40 else result['description']
-        url = result['url'][:30] + "..." if len(result['url']) > 30 else result['url']
-        reputable = "Yes" if result['reputable'] else "No"
+        title = result["title"]
+        if len(title) > 36:
+            title = title[:33] + "..."
+
+        description = result.get("description") or ""
+        if len(description) > 40:
+            description = description[:37] + "..."
+
+        url = result.get("url") or ""
+        if url:
+            # Full repo URL; avoid truncating to https://github.com/<user> only
+            url_cell = f"[link={url}]{url}[/link]"
+        else:
+            url_cell = ""
+
+        reputable = "Yes" if result["reputable"] else "No"
 
         table.add_row(
-            result['source'].title(),
+            result["source"].title(),
             title,
             description,
-            url,
-            reputable
+            url_cell,
+            reputable,
         )
 
     console.print(table)

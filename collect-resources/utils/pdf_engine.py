@@ -35,7 +35,19 @@ def strip_emojis(text: str) -> str:
 
 def sanitize_for_pdf(text: str) -> str:
     """Prepare text for PDF rendering (strip emojis, normalize punctuation)."""
-    return strip_emojis(text).replace('—', '-')
+    text = strip_emojis(text)
+    replacements = (
+        ("\u2014", "-"),   # em dash
+        ("\u2013", "-"),   # en dash
+        ("\u2018", "'"),   # left single quote
+        ("\u2019", "'"),   # right single quote
+        ("\u201c", '"'),   # left double quote
+        ("\u201d", '"'),   # right double quote
+        ("\u2026", "..."), # ellipsis
+    )
+    for old, new in replacements:
+        text = text.replace(old, new)
+    return text.encode("latin-1", "replace").decode("latin-1")
 
 
 class PDF(FPDF):
