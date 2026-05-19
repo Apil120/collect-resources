@@ -128,13 +128,49 @@ python main.py history
 
 ## Configuration
 
-Create or edit `config.json` in the project root:
+Create or edit `config.json` in the project root (`collect-resources/`):
 
 ```json
 {
-  "github_token": "your_github_token_here",
+  "github_token": "",
   "default_export_path": "./exports",
-  "cache_duration_hours": 24
+  "cache_duration_hours": 24,
+  "mysql": {
+    "host": "localhost",
+    "port": "<your mysql port>",
+    "user": "your mysql user",
+    "password": "your mysql password",
+    "database": "your_db"
+  }
+}
+```
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `github_token` | string | GitHub Personal Access Token for higher API rate limits. Leave empty to use unauthenticated requests, or set the `GITHUB_TOKEN` environment variable instead. |
+| `default_export_path` | string | Directory where search results are exported on every run (default: `./exports`). |
+| `cache_duration_hours` | number | Intended cache lifetime in hours for stored search results (default: `24`). |
+| `mysql` | object | MySQL settings for the local search cache and history. |
+| `mysql.host` | string | MySQL server hostname (default: `localhost`). |
+| `mysql.port` | number | MySQL server port (default: `3306`). |
+| `mysql.user` | string | MySQL username. |
+| `mysql.password` | string | MySQL password. |
+| `mysql.database` | string | MySQL database name (default: `project_look`). Tables are created automatically on first run. |
+
+**Example** (with token and custom export path):
+
+```json
+{
+  "github_token": "ghp_your_token_here",
+  "default_export_path": "./exports",
+  "cache_duration_hours": 24,
+  "mysql": {
+    "host": "localhost",
+    "port": 3306,
+    "user": "root",
+    "password": "your_password",
+    "database": "project_look"
+  }
 }
 ```
 
