@@ -42,7 +42,7 @@ def cli():
 @click.option('--offline', '-o', is_flag=True,
               help='Use only cached data, no network requests')
 @click.option('--export', '-e', type=click.Path(),
-              help='Export results to PDF at specified path')
+              help='Export results to PDF (saved to ./exports directory)')
 @click.option('--ignore-lang', '-i', is_flag=True,
               help='Include non-English resources (default: filter out non-English)')
 def search(query: str, source: Optional[str], include_all: bool,
@@ -54,7 +54,7 @@ def search(query: str, source: Optional[str], include_all: bool,
     Examples:
       look "data structures"
       look "machine learning" --source github
-      look "algorithms" --include-all --export results.pdf
+      look "algorithms" --include-all --export results.pdf  # Saved to ./exports/results.pdf
     """
     # Initialize components
     api_client = APIClient()
@@ -104,17 +104,42 @@ def search(query: str, source: Optional[str], include_all: bool,
         # Export to PDF if requested
         if export:
             try:
-                generate_pdf(results, query, export)
-                click.echo(f"Results exported to {export}")
+                # Load config to get default export path
+                import json
+                import os
+                config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'config.json')
+                with open(config_path, 'r') as f:
+                    config = json.load(f)
+                default_export_path = config.get('default_export_path', './exports')
+
+                # Extract filename from export path and combine with default export path
+                filename = os.path.basename(export)
+                export_path = os.path.join(default_export_path, filename)
+
+                # Ensure export directory exists
+                os.makedirs(default_export_path, exist_ok=True)
+
+                generate_pdf(results, query, export_path)
+                click.echo(f"Results exported to {export_path}")
             except Exception as e:
                 click.echo(f"Warning: PDF generation failed: {str(e)}", err=True)
                 # Fallback to text file
-                if export.lower().endswith('.pdf'):
-                    text_path = export[:-4] + '.txt'
-                else:
-                    text_path = export + '.txt'
-                save_as_text(results, query, text_path)
-                click.echo(f"Results saved as text file: {text_path}")
+                try:
+                    # Reuse config values from above
+                    filename = os.path.basename(export)
+                    if filename.lower().endswith('.pdf'):
+                        text_filename = filename[:-4] + '.txt'
+                    else:
+                        text_filename = filename + '.txt'
+                    text_path = os.path.join(default_export_path, text_filename)
+
+                    # Ensure export directory exists
+                    os.makedirs(default_export_path, exist_ok=True)
+
+                    save_as_text(results, query, text_path)
+                    click.echo(f"Results saved as text file: {text_path}")
+                except Exception as text_e:
+                    click.echo(f"Warning: Text file generation also failed: {str(text_e)}", err=True)
 
     except Exception as e:
         click.echo(f"Error: {str(e)}", err=True)
