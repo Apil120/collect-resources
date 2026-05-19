@@ -9,26 +9,25 @@ from typing import List, Dict, Any
 from fpdf import FPDF
 
 
-# Broad emoji / pictograph ranges (removed entirely from PDF text)
-_EMOJI_PATTERN = re.compile(
-    "["
-    "\U0001F1E0-\U0001F1FF"  # flags
-    "\U0001F300-\U0001FAFF"  # symbols, pictographs, extended
-    "\U0001F600-\U0001F64F"  # emoticons
-    "\U00002600-\U000027BF"  # misc symbols
-    "\U00002300-\U000023FF"  # misc technical
-    "\U000024C2-\U0001F251"
-    "\U0000FE00-\U0000FE0F"  # variation selectors
-    "\U0000200D"             # zero-width joiner
-    "]+",
-    flags=re.UNICODE,
-)
 
 
 def strip_emojis(text: str) -> str:
     """Remove emoji characters from text for PDF-safe output."""
     if text is None:
         return ''
+    _EMOJI_PATTERN = re.compile(
+        "["
+        "\U0001F1E0-\U0001F1FF"  # flags
+        "\U0001F300-\U0001FAFF"  # symbols, pictographs, extended
+        "\U0001F600-\U0001F64F"  # emoticons
+        "\U00002600-\U000027BF"  # misc symbols
+        "\U00002300-\U000023FF"  # misc technical
+        "\U000024C2-\U0001F251"
+        "\U0000FE00-\U0000FE0F"  # variation selectors
+        "\U0000200D"             # zero-width joiner
+        "]+",
+        flags=re.UNICODE,
+    )
     cleaned = _EMOJI_PATTERN.sub('', str(text))
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
     return cleaned
@@ -47,22 +46,14 @@ class PDF(FPDF):
         self.font_family = 'Helvetica'  # default to core font
         font_dir = os.path.join(os.path.dirname(__file__), 'fonts')
         font_path = os.path.join(font_dir, 'DejaVuSans.ttf')
-        if not os.path.exists(font_path):
-            try:
-                os.makedirs(font_dir, exist_ok=True)
-                url = "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans.ttf"
-                urllib.request.urlretrieve(url, font_path)
-            except Exception as e:
-                # If download fails, we keep Helvetica
-                pass
-        # Now, if the font file exists, we try to add it
-        if os.path.exists(font_path):
-            try:
-                self.add_font('DejaVu', '', font_path, uni=True)
-                self.font_family = 'DejaVu'
-            except Exception as e:
-                # If adding fails, we keep Helvetica
-                pass
+        os.makedirs(font_dir, exist_ok=True)
+        try:
+            url = "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans.ttf"
+            urllib.request.urlretrieve(url, font_path)
+            self.add_font('DejaVu', '', font_path, uni=True)
+            self.font_family = 'DejaVu'
+        except Exception as e:
+            pass
 
     def header(self):
         """Add header to each page."""
