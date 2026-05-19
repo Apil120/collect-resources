@@ -4,7 +4,6 @@ Handles requests to GitHub and Open Library APIs with structured User-Agents and
 """
 
 import requests
-import json
 from typing import Dict, List, Optional, Any
 
 

@@ -3,7 +3,6 @@ Display module for Project Look.
 Formatting layer wrapping 'rich' layouts for console tables.
 """
 
-import click
 from rich.table import Table
 from rich.console import Console
 from rich import box

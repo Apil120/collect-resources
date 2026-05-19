@@ -3,11 +3,10 @@ Cache manager module for Project Look.
 Handles MySQL connection pooling, schema generation, and query filtering.
 """
 
-import mysql.connector
 import json
-import os
-from typing import List, Tuple, Optional, Dict, Any
-from datetime import datetime
+import mysql.connector
+from mysql.connector import Error
+from typing import List,  Optional, Dict, Any
 
 
 class CacheManager:
@@ -21,7 +20,6 @@ class CacheManager:
 
     def _load_config(self):
         """Load database configuration from config.json."""
-        import json
         try:
             with open(self.config_path, 'r') as f:
                 config = json.load(f)
@@ -49,8 +47,6 @@ class CacheManager:
 
     def _init_db(self):
         """Initialize the database with required tables."""
-        import mysql.connector
-        from mysql.connector import Error
 
         try:
             self.connection = mysql.connector.connect(**self.db_config)
