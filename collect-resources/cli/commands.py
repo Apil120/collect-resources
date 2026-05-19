@@ -6,6 +6,8 @@ Main Click setup defining interface entry points and interactive hooks.
 import click
 import sys
 import re
+import json
+import os
 from typing import Optional, List
 from core.api_client import APIClient
 from core.cache_manager import CacheManager
@@ -24,7 +26,23 @@ def contains_cjk(text: str) -> bool:
     return bool(pattern.search(text))
 
 
-@click.group()
+class DefaultGroup(click.Group):
+    """Run `search` when the first argument is not a subcommand name."""
+
+    default_cmd = 'search'
+
+    def parse_args(self, ctx, args):
+        if not args:
+            return super().parse_args(ctx, args)
+        if args[0] in self.commands:
+            return super().parse_args(ctx, args)
+        if args[0] in ('--help', '-h', '--version'):
+            return super().parse_args(ctx, args)
+        args = [self.default_cmd, *args]
+        return super().parse_args(ctx, args)
+
+
+@click.group(cls=DefaultGroup)
 @click.version_option(version="1.0.0")
 def cli():
     """Project Look - CLI tool for discovering open-source learning resources."""
@@ -42,7 +60,7 @@ def cli():
 @click.option('--offline', '-o', is_flag=True,
               help='Use only cached data, no network requests')
 @click.option('--export', '-e', type=click.Path(),
-              help='Export results to PDF (saved to ./exports directory)')
+              help='Optional custom export path (file or directory); default is ./exports/<query>.pdf')
 @click.option('--ignore-lang', '-i', is_flag=True,
               help='Include non-English resources (default: filter out non-English)')
 def search(query: str, source: Optional[str], include_all: bool,
@@ -52,9 +70,9 @@ def search(query: str, source: Optional[str], include_all: bool,
 
     \b
     Examples:
-      look "data structures"
-      look "machine learning" --source github
-      look "algorithms" --include-all --export results.pdf  # Saved to ./exports/results.pdf
+      python main.py "data structures"
+      python main.py "machine learning" --source github
+      python main.py "algorithms" --include-all --export results.pdf
     """
     # Initialize components
     api_client = APIClient()
@@ -101,45 +119,8 @@ def search(query: str, source: Optional[str], include_all: bool,
         # Display results
         display_results(results, query)
 
-        # Export to PDF if requested
-        if export:
-            try:
-                # Load config to get default export path
-                import json
-                import os
-                config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'config.json')
-                with open(config_path, 'r') as f:
-                    config = json.load(f)
-                default_export_path = config.get('default_export_path', './exports')
-
-                # Extract filename from export path and combine with default export path
-                filename = os.path.basename(export)
-                export_path = os.path.join(default_export_path, filename)
-
-                # Ensure export directory exists
-                os.makedirs(default_export_path, exist_ok=True)
-
-                generate_pdf(results, query, export_path)
-                click.echo(f"Results exported to {export_path}")
-            except Exception as e:
-                click.echo(f"Warning: PDF generation failed: {str(e)}", err=True)
-                # Fallback to text file
-                try:
-                    # Reuse config values from above
-                    filename = os.path.basename(export)
-                    if filename.lower().endswith('.pdf'):
-                        text_filename = filename[:-4] + '.txt'
-                    else:
-                        text_filename = filename + '.txt'
-                    text_path = os.path.join(default_export_path, text_filename)
-
-                    # Ensure export directory exists
-                    os.makedirs(default_export_path, exist_ok=True)
-
-                    save_as_text(results, query, text_path)
-                    click.echo(f"Results saved as text file: {text_path}")
-                except Exception as text_e:
-                    click.echo(f"Warning: Text file generation also failed: {str(text_e)}", err=True)
+        export_path = resolve_export_path(export, query)
+        write_export(results, query, export_path)
 
     except Exception as e:
         click.echo(f"Error: {str(e)}", err=True)
@@ -235,6 +216,74 @@ def cache_results_to_db(cache_manager: CacheManager, query_id: int, results: Lis
             cache_manager.cache_results(query_id, ol_results, 'open_library')
 
 
+def load_config() -> dict:
+    """Load config.json from the project root."""
+    config_path = os.path.join(os.path.dirname(__file__), '..', 'config.json')
+    with open(config_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def query_to_filename(query: str, ext: str = '.pdf') -> str:
+    """Build a safe filename from a search query."""
+    slug = re.sub(r'[^\w\s-]', '', query.lower())
+    slug = re.sub(r'[-\s]+', '_', slug).strip('_')
+    return f'{slug or "search_results"}{ext}'
+
+
+def resolve_export_path(custom_export: Optional[str], query: str) -> str:
+    """
+    Resolve the export file path.
+
+    Without --export: ./exports/<query>.pdf (from config default_export_path).
+    With --export: use the given path as a file, or as a directory for the default filename.
+    """
+    config = load_config()
+    default_export_dir = config.get('default_export_path', './exports')
+    default_filename = query_to_filename(query)
+
+    os.makedirs(default_export_dir, exist_ok=True)
+
+    if not custom_export:
+        return os.path.join(default_export_dir, default_filename)
+
+    custom_export = os.path.normpath(custom_export)
+    _, ext = os.path.splitext(custom_export)
+
+    if ext.lower() in ('.pdf', '.txt'):
+        parent = os.path.dirname(custom_export)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        return custom_export
+
+    os.makedirs(custom_export, exist_ok=True)
+    return os.path.join(custom_export, default_filename)
+
+
+def write_export(results: List[dict], query: str, export_path: str) -> None:
+    """Write search results to PDF, falling back to plain text on failure."""
+    export_dir = os.path.dirname(os.path.abspath(export_path)) or '.'
+    os.makedirs(export_dir, exist_ok=True)
+
+    if not results:
+        click.echo(f"No results to export (directory ready: {export_dir})")
+        return
+
+    try:
+        generate_pdf(results, query, export_path)
+        click.echo(f"Results exported to {export_path}")
+    except Exception as e:
+        click.echo(f"Warning: PDF generation failed: {str(e)}", err=True)
+        try:
+            if export_path.lower().endswith('.pdf'):
+                text_path = export_path[:-4] + '.txt'
+            else:
+                text_path = export_path + '.txt'
+            save_as_text(results, query, text_path)
+            click.echo(f"Results saved as text file: {text_path}")
+        except Exception as text_e:
+            click.echo(f"Warning: Text file generation also failed: {str(text_e)}", err=True)
+
+
 def save_as_text(results: List[dict], query: str, output_path: str):
     """Save results as a plain text file."""
     import os
@@ -252,6 +301,7 @@ def save_as_text(results: List[dict], query: str, output_path: str):
             f.write(f'   URL: {result["url"]}\n')
             f.write(f'   Reputable: {"Yes" if result["reputable"] else "No"}\n')
             f.write('-' * 50 + '\n\n')
+
 
 
 if __name__ == '__main__':

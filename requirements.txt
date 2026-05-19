@@ -1,5 +1,5 @@
 # Core dependencies for Project Look CLI
-click>=8.0
+click>=8.2
 rich>=13.0
 requests>=2.31.0
 fpdf2>=2.7.0

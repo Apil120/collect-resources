@@ -38,37 +38,92 @@ A command-line interface (CLI) application that aggregates, caches, and exports 
 
 ## Usage
 
-### Basic Search
+Run commands from the `collect-resources` directory (where `main.py` lives). Search is the default command, so you can pass a query directly without typing `search`.
+
+### Global options
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--help` | | Show help for the CLI or a subcommand |
+| `--version` | | Show the application version (1.0.0) |
+
+```bash
+python main.py --help
+python main.py --version
+python main.py search --help
+```
+
+### Search flags
+
+Use these with a search query: `python main.py "<search term>" [flags]`
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--source` | `-s` | Limit search to one source: `github` or `open_library` |
+| `--include-all` | `-a` | Include all results, not only reputable ones (GitHub: ≤100 stars) |
+| `--refresh` | `-r` | Force a fresh API fetch and bypass the cache |
+| `--offline` | `-o` | Use only cached data; no network requests |
+| `--export` | `-e` | Optional custom export path (file or directory); every search also writes to `./exports` by default |
+| `--ignore-lang` | `-i` | Include non-English resources (default: CJK titles/descriptions are filtered out) |
+
+The search term is a required positional argument (quote phrases with spaces).
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| *(default)* / `search` | Search for learning resources |
+| `history` | Show previous searches stored in the local cache |
+
+### Basic search
+
 ```bash
 # Search all sources (default)
-look "data structures"
+python main.py "data structures"
 
-# Search specific source
-look "machine learning" --source github
+# Same as above, with explicit subcommand
+python main.py search "data structures"
+
+# Search a specific source
+python main.py "machine learning" --source github
+python main.py "algorithms" -s open_library
 
 # Include all results (including non-reputable)
-look "algorithms" --include-all
+python main.py "algorithms" --include-all
+python main.py "algorithms" -a
 
 # Force refresh from API (bypass cache)
-look "react" --refresh
+python main.py "react" --refresh
+python main.py "react" -r
 
-# Offline mode (use cached data only)
-look "python" --offline
+# Offline mode (cached data only)
+python main.py "python" --offline
+python main.py "python" -o
+
+# Include non-English resources
+python main.py "数据结构" --ignore-lang
+python main.py "数据结构" -i
 ```
 
-### Export Results
-```bash
-# Export to PDF
-look "data structures" --export ./data_structures.pdf
+### Export results
 
-# Export with specific options
-look "machine learning" --source github --export ./ml_github.pdf
+Every search automatically exports results to `./exports/<query>.pdf` (or `.txt` if PDF generation fails). The `exports/` directory is always created.
+
+```bash
+# Default export: ./exports/data_structures.pdf
+python main.py "data structures"
+
+# Custom file path
+python main.py "machine learning" --export ../reports/ml.pdf
+
+# Custom directory (uses default filename derived from the query)
+python main.py "algorithms" --export ./my-reports/
 ```
 
-### View History
+### View history
+
 ```bash
-# Show search history
-look --history
+python main.py history
 ```
 
 ## Configuration

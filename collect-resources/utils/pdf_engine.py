@@ -3,9 +3,40 @@ PDF engine module for PDF document structure and clickable link mapping.
 """
 
 import os
+import re
 import urllib.request
 from typing import List, Dict, Any
 from fpdf import FPDF
+
+
+# Broad emoji / pictograph ranges (removed entirely from PDF text)
+_EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F1E0-\U0001F1FF"  # flags
+    "\U0001F300-\U0001FAFF"  # symbols, pictographs, extended
+    "\U0001F600-\U0001F64F"  # emoticons
+    "\U00002600-\U000027BF"  # misc symbols
+    "\U00002300-\U000023FF"  # misc technical
+    "\U000024C2-\U0001F251"
+    "\U0000FE00-\U0000FE0F"  # variation selectors
+    "\U0000200D"             # zero-width joiner
+    "]+",
+    flags=re.UNICODE,
+)
+
+
+def strip_emojis(text: str) -> str:
+    """Remove emoji characters from text for PDF-safe output."""
+    if text is None:
+        return ''
+    cleaned = _EMOJI_PATTERN.sub('', str(text))
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned
+
+
+def sanitize_for_pdf(text: str) -> str:
+    """Prepare text for PDF rendering (strip emojis, normalize punctuation)."""
+    return strip_emojis(text).replace('—', '-')
 
 
 class PDF(FPDF):
@@ -60,13 +91,7 @@ def generate_pdf(results: List[Dict[str, Any]], query: str, output_path: str):
     pdf.add_page()
     pdf.set_font(pdf.font_family, '', 12)
 
-    # Helper function to sanitize text for PDF (replace em dash with hyphen)
-    def sanitize(text):
-        if text is None:
-            return ''
-        return str(text).replace('—', '-')
-
-    pdf.multi_cell(w=0, h=5, txt=f'Search Query: {sanitize(query)}', border=0, ln=1, align='L')
+    pdf.multi_cell(w=0, h=5, txt=f'Search Query: {sanitize_for_pdf(query)}', border=0, ln=1, align='L')
     pdf.multi_cell(w=0, h=5, txt=f'Total Results: {len(results)}', border=0, ln=1, align='L')
     pdf.multi_cell(w=0, h=5, txt='=' * 50, border=0, ln=1, align='L')
     pdf.ln(5)  # blank line after the equals line
@@ -78,9 +103,9 @@ def generate_pdf(results: List[Dict[str, Any]], query: str, output_path: str):
     pdf.set_font(pdf.font_family, '', 10)
     for i, result in enumerate(results, 1):
         lines = [
-            f'{i}. {sanitize(result["title"])} ({sanitize(result["source"])})',
-            f'   Description: {sanitize(result["description"])}',
-            f'   URL: {sanitize(result["url"])}',
+            f'{i}. {sanitize_for_pdf(result["title"])} ({sanitize_for_pdf(result["source"])})',
+            f'   Description: {sanitize_for_pdf(result["description"])}',
+            f'   URL: {sanitize_for_pdf(result["url"])}',
             f'   Reputable: {"Yes" if result["reputable"] else "No"}',
             '-' * 50
         ]
@@ -111,7 +136,7 @@ def create_simple_pdf(results: List[Dict[str, Any]], query: str, output_path: st
     pdf.cell(0, 10, 'Search Results Report', 0, 1, 'C')
     pdf.ln(10)
     pdf.set_font(pdf.font_family, '', 12)
-    pdf.cell(0, 10, f'Search Query: {query}', 0, 1)
+    pdf.cell(0, 10, f'Search Query: {sanitize_for_pdf(query)}', 0, 1)
     pdf.cell(0, 10, f'Total Results: {len(results)}', 0, 1)
     pdf.ln(10)
 
@@ -121,9 +146,9 @@ def create_simple_pdf(results: List[Dict[str, Any]], query: str, output_path: st
 
     pdf.set_font(pdf.font_family, '', 10)
     for i, result in enumerate(results, 1):
-        pdf.cell(0, 6, f'{i}. {result["title"]} ({result["source"]})', 0, 1)
-        pdf.cell(0, 6, f'   Description: {result["description"][:100]}', 0, 1)
-        pdf.cell(0, 6, f'   URL: {result["url"]}', 0, 1)
+        pdf.cell(0, 6, f'{i}. {sanitize_for_pdf(result["title"])} ({sanitize_for_pdf(result["source"])})', 0, 1)
+        pdf.cell(0, 6, f'   Description: {sanitize_for_pdf(result["description"])[:100]}', 0, 1)
+        pdf.cell(0, 6, f'   URL: {sanitize_for_pdf(result["url"])}', 0, 1)
         pdf.cell(0, 6, f'   Reputable: {"Yes" if result["reputable"] else "No"}', 0, 1)
         pdf.ln(3)
 

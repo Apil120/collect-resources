@@ -79,6 +79,11 @@ class CacheManager:
                 )
             """)
 
+            # Align older schemas that used shorter column types
+            cursor.execute(
+                "ALTER TABLE resources MODIFY description TEXT"
+            )
+
             self.connection.commit()
             cursor.close()
         except Error as e:
@@ -177,6 +182,9 @@ class CacheManager:
 
         # Insert new results
         for result in results:
+            title = (result['title'] or '')[:255]
+            description = (result.get('description') or '')[:65535]
+            url = (result['url'] or '')[:512]
             cursor.execute(
                 """
                 INSERT INTO resources (query_id, source, title, description, url, reputable)
@@ -185,9 +193,9 @@ class CacheManager:
                 (
                     query_id,
                     source,
-                    result['title'],
-                    result.get('description', ''),
-                    result['url'],
+                    title,
+                    description,
+                    url,
                     result['reputable']
                 )
             )
